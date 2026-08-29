@@ -1,0 +1,34 @@
+{
+  "build_command": "pnpm run build",
+  "capabilities": [],
+  "dev_command": "pnpm run dev",
+  "env_vars": {},
+  "experiments": null,
+  "git_remote": {
+    "repo_url": "https://7f0548f6b28a1758d9bf7be630d36cb4.artifacts.cloudflare.net/git/prod/Jdvn9PqHFiuqjYHLYsxQzB.git",
+    "expiration": "2026-08-30T14:50:06.920Z",
+    "token": "art_v2_x_0a12ea48bed2721b9ed524157bad5559781d1bf4?expires=1788101406",
+    "backend": "GIT_BACKEND_ARTIFACTS"
+  },
+  "name": "ios-style-clock",
+  "path": "/home/ubuntu/ios-style-clock",
+  "port": 3000,
+  "secrets": {
+    "BUILT_IN_FORGE_API_KEY": "n5fV4aqKotxLsMrS6DdKsX",
+    "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
+    "JWT_SECRET": "Cquvq3pFDfa8ZspKVnHfG3",
+    "OAUTH_SERVER_URL": "https://api.manus.im",
+    "OWNER_NAME": "dismaljj11",
+    "OWNER_OPEN_ID": "HdHmtB9fkxLH2aGGzNbCUh",
+    "VITE_ANALYTICS_ENDPOINT": "https://manus-analytics.com",
+    "VITE_ANALYTICS_WEBSITE_ID": "b6badf5f-f62e-4c42-9218-15f416382533",
+    "VITE_APP_ID": "Jdvn9PqHFiuqjYHLYsxQzB",
+    "VITE_APP_LOGO": "",
+    "VITE_APP_TITLE": "iOS Style Clock",
+    "VITE_FRONTEND_FORGE_API_KEY": "6UbKFToGPraj3W3gdR9sut",
+    "VITE_FRONTEND_FORGE_API_URL": "https://forge.manus.ai",
+    "VITE_OAUTH_PORTAL_URL": "https://manus.im"
+  },
+  "template_id": "web-static",
+  "test_command": "pnpm test"
+}

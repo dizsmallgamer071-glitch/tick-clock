@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#edf1f6" />
+  <meta name="description" content="TICK. — a quieter way to watch time." />
+  <title>TICK. — a quieter way to watch time</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='6' width='52' height='52' rx='17' fill='%23f8fbff' stroke='%232f63d8' stroke-width='4'/%3E%3Cpath d='M32 16v18l12 7' fill='none' stroke='%231f2733' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='48' cy='15' r='4' fill='%232f63d8'/%3E%3C/svg%3E" />
+  <style>
+    /* Quiet Cupertino: the time stays dominant, surfaces feel native, and motion is compositor-friendly. */
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      --cobalt: #2f63d8;
+      --ease: cubic-bezier(.23, 1, .32, 1);
+      --pointer-x: 0;
+      --pointer-y: 0;
+      --frame-gutter: clamp(24px, 6.8vw, 110px);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-width: 320px; min-height: 100%; }
+    body { min-height: 100svh; }
+    button { font: inherit; }
+    button:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 55%, white); outline-offset: 4px; }
+    .clock-shell {
+      --surface: rgba(255,255,255,.66);
+      --surface-strong: rgba(255,255,255,.78);
+      --border: rgba(42,56,75,.11);
+      --text: #1f2733;
+      --soft: #697486;
+      --faint: #98a0af;
+      --track: rgba(47,99,216,.14);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-height: 100svh;
+      overflow: hidden;
+      isolation: isolate;
+      color: var(--text);
+      background: #edf1f6;
+      background-image: radial-gradient(ellipse at 80% 112%, rgba(181, 207, 244, .62), transparent 43%), radial-gradient(ellipse at 22% 18%, rgba(255, 223, 211, .57), transparent 40%), linear-gradient(120deg, rgba(255,255,255,.78), rgba(243,247,251,.42) 48%, rgba(219,227,241,.52));
+      transition: color .24s var(--ease), background-color .24s var(--ease), background-image .42s var(--ease);
+    }
+    .clock-shell.dark {
+      color-scheme: dark;
+      --surface: rgba(15,21,31,.66);
+      --surface-strong: rgba(18,26,39,.8);
+      --border: rgba(232,239,251,.12);
+      --text: #f1f4f9;
+      --soft: #aab5c6;
+      --faint: #7d899a;
+      --track: rgba(113,151,236,.17);
+      background-color: #0f1520;
+      background-image: radial-gradient(ellipse at 77% 12%, rgba(53,79,140,.3), transparent 42%), radial-gradient(ellipse at 15% 110%, rgba(20,42,78,.38), transparent 44%), linear-gradient(120deg, rgba(12,18,28,.76), rgba(22,32,49,.5) 48%, rgba(6,11,19,.8));
+    }
+    .clock-haze { position: absolute; z-index: -1; width: 48vw; height: 48vw; top: -20vw; right: -14vw; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, rgba(255,255,255,.66), transparent 68%); filter: blur(3px); transform: translate3d(calc(var(--pointer-x) * -8px), calc(var(--pointer-y) * -8px), 0); animation: haze-drift 18s ease-in-out infinite alternate; will-change: transform; }
+    .dark .clock-haze { background: radial-gradient(circle, rgba(81,119,205,.12), transparent 68%); }
+    .clock-header { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 28px var(--frame-gutter) 0; animation: header-in .75s var(--ease) both; will-change: transform, opacity; }
+    .brand-lockup { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { width: 40px; height: 40px; filter: drop-shadow(0 6px 12px rgba(47,99,216,.1)); }
+    .brand-name, .brand-kicker, .header-status, .eyebrow, .stage-note, .date-label, .time-meta, .rail-title, .rail-subtitle, .chip-label, .chip-value, .aside-caption, .clock-footer { margin: 0; }
+    .brand-name { color: var(--soft); font-size: 14px; font-weight: 800; letter-spacing: .13em; line-height: 1; }
+    .brand-kicker { margin-top: 2px; color: var(--faint); font: 9px/1.2 "SF Mono", "SFMono-Regular", ui-monospace, monospace; letter-spacing: .07em; text-transform: uppercase; }
+    .header-status { display: flex; align-items: center; gap: 7px; color: var(--soft); font: 10px "SF Mono", "SFMono-Regular", ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--cobalt); box-shadow: 0 0 0 4px rgba(47,99,216,.1); }
+    .clock-stage { display: grid; grid-template-columns: minmax(190px,.8fr) minmax(420px,1.45fr) minmax(160px,.55fr); align-items: center; width: min(100%,1540px); min-height: min(72vh,760px); margin: 0 auto; padding: clamp(54px,7vh,96px) var(--frame-gutter) 34px; gap: clamp(24px,4vw,68px); animation: hero-settle .9s var(--ease) both; will-change: transform, opacity; }
+    .stage-copy { align-self: center; max-width: 220px; padding-top: 8px; animation: copy-rise .82s .07s var(--ease) both; will-change: transform, opacity; }
+    .eyebrow { color: var(--soft); font-size: 11px; font-weight: 650; letter-spacing: .015em; text-transform: lowercase; }
+    .stage-copy h1 { max-width: 190px; margin: 18px 0 12px; color: var(--text); font-size: clamp(21px,2.15vw,32px); font-weight: 500; letter-spacing: -.045em; line-height: 1.02; }
+    .stage-note { max-width: 160px; color: var(--faint); font-size: 12px; line-height: 1.5; }
+    .time-block { position: relative; min-width: 0; text-align: center; animation: time-arrive .96s .04s var(--ease) both; will-change: transform, opacity; }
+    .time-block::before { content: ""; position: absolute; z-index: -1; inset: 9% 13%; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.43), transparent 68%); filter: blur(22px); transform: translate3d(calc(var(--pointer-x) * 5px), calc(var(--pointer-y) * 5px), 0); transition: transform .3s var(--ease); }
+    .dark .time-block::before { background: radial-gradient(circle, rgba(83,119,204,.12), transparent 68%); }
+    .date-label { display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--soft); font-size: 15px; font-weight: 500; letter-spacing: -.01em; }
+    .time-readout { display: flex; align-items: baseline; justify-content: center; white-space: nowrap; margin: 17px 0 14px; color: var(--text); font-variant-numeric: tabular-nums lining-nums; }
+    .time-main { display: inline-block; font-size: clamp(86px,13vw,198px); font-weight: 650; letter-spacing: -.095em; line-height: .9; animation: digit-breathe 1s var(--ease) both; will-change: transform, opacity; }
+    .time-seconds { display: inline-block; width: 1.55ch; margin-left: .07em; color: var(--soft); font-size: clamp(26px,3.7vw,54px); font-weight: 500; letter-spacing: -.08em; line-height: 1; animation: seconds-tick .46s var(--ease) both; will-change: transform, opacity; }
+    .time-meridiem { display: inline-block; align-self: flex-start; margin: .12em 0 0 .3em; color: var(--cobalt); font: 700 clamp(14px,1.2vw,19px) "SF Mono", "SFMono-Regular", ui-monospace, monospace; letter-spacing: .04em; animation: meridiem-settle .42s var(--ease) both; will-change: transform, opacity; }
+    .time-meta { display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--faint); font: 10px "SF Mono", "SFMono-Regular", ui-monospace, monospace; letter-spacing: .07em; text-transform: uppercase; }
+    .meta-rule { width: 18px; height: 1px; background: var(--border); }
+    .stage-aside { align-self: center; justify-self: end; max-width: 150px; text-align: center; animation: aside-float 1s .18s var(--ease) both; will-change: transform, opacity; }
+    .progress-orbit { position: relative; width: 146px; height: 146px; }
+    .progress-orbit svg { display: block; width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
+    .progress-orbit circle { fill: none; stroke-width: 1.25; }
+    .orbit-track { stroke: var(--track); }
+    .orbit-progress { stroke: var(--cobalt); stroke-linecap: round; stroke-dasharray: 276.46; transition: stroke-dashoffset .48s var(--ease); }
+    .orbit-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .orbit-value { color: var(--text); font-size: 22px; font-weight: 650; letter-spacing: -.06em; }
+    .orbit-label { margin-top: 4px; color: var(--faint); font: 9px "SF Mono", "SFMono-Regular", ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
+    .aside-caption { margin-top: 16px; color: var(--soft); font-size: 11px; line-height: 1.45; }
+    .utility-rail { display: flex; align-items: center; justify-content: space-between; width: min(calc(100% - (var(--frame-gutter) * 2)),1080px); margin: auto var(--frame-gutter) 0 auto; padding: 14px 15px 14px 18px; border: 1px solid var(--border); border-radius: 17px; background: color-mix(in srgb, var(--surface) 74%, transparent); box-shadow: 0 18px 70px rgba(44,56,79,.1), inset 0 1px 0 rgba(255,255,255,.58); backdrop-filter: blur(30px) saturate(1.25); -webkit-backdrop-filter: blur(30px) saturate(1.25); animation: rail-in .72s var(--ease) both; will-change: transform, opacity; }
+    .dark .utility-rail { box-shadow: 0 18px 70px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.06); }
+    .rail-intro, .rail-actions { display: flex; align-items: center; }
+    .rail-intro { gap: 10px; }
+    .rail-icon { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--border); border-radius: 10px; color: var(--soft); background: transparent; }
+    .rail-title { color: var(--text); font-size: 12px; font-weight: 650; letter-spacing: -.01em; }
+    .rail-subtitle { margin-top: 3px; color: var(--faint); font-size: 10px; }
+    .rail-actions { gap: 8px; }
+    .control-chip, .icon-button { border: 1px solid transparent; color: var(--text); background: transparent; transition: transform .16s var(--ease), background-color .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease); }
+    .control-chip { position: relative; display: grid; grid-template-columns: auto auto; align-items: center; min-width: 122px; padding: 9px 28px 9px 12px; border-radius: 10px; text-align: left; cursor: pointer; }
+    .control-chip:hover, .icon-button:hover { border-color: var(--border); background: color-mix(in srgb, var(--surface-strong) 72%, transparent); }
+    .control-chip:active, .icon-button:active { transform: scale(.97); }
+    .chip-label, .chip-value { grid-column: 1 / -1; }
+    .chip-label { color: var(--faint); font: 8px "SF Mono", "SFMono-Regular", ui-monospace, monospace; letter-spacing: .09em; text-transform: uppercase; }
+    .chip-value { margin-top: 3px; color: var(--text); font-size: 11px; font-weight: 600; }
+    .chip-check { position: absolute; top: 50%; right: 10px; display: grid; width: 18px; height: 18px; place-items: center; transform: translateY(-50%); border-radius: 50%; color: white; background: var(--cobalt); font-size: 12px; }
+    .chip-icon { position: absolute; top: 10px; right: 10px; color: var(--cobalt); }
+    .icon-button { display: grid; width: 38px; height: 38px; place-items: center; border-color: var(--border); border-radius: 11px; color: var(--soft); cursor: pointer; }
+    .icon-button:hover { color: var(--cobalt); }
+    .clock-footer { display: flex; align-items: center; justify-content: space-between; width: min(calc(100% - (var(--frame-gutter) * 2)),1080px); margin: 21px var(--frame-gutter) 24px auto; color: var(--faint); font: 9px "SF Mono", "SFMono-Regular", ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .footer-line { display: inline-block; width: 22px; height: 1px; margin: 0 9px 3px 0; background: var(--cobalt); }
+    @keyframes header-in { from { opacity: 0; transform: translate3d(0,-10px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+    @keyframes hero-settle { from { opacity: 0; transform: translate3d(0,18px,0) scale(.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }
+    @keyframes copy-rise { from { opacity: 0; transform: translate3d(-18px,9px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+    @keyframes time-arrive { from { opacity: 0; transform: translate3d(0,22px,0) scale(.97); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }
+    @keyframes digit-breathe { from { opacity: .2; transform: translate3d(0,5px,0) scale(.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }
+    @keyframes seconds-tick { from { opacity: .12; transform: translate3d(0,6px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+    @keyframes meridiem-settle { from { opacity: 0; transform: translate3d(0,-5px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+    @keyframes aside-float { from { opacity: 0; transform: translate3d(12px,12px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+    @keyframes haze-drift { from { opacity: .72; transform: translate3d(calc(var(--pointer-x) * -8px),calc(var(--pointer-y) * -8px),0) scale(.98); } to { opacity: 1; transform: translate3d(calc(var(--pointer-x) * -8px),calc(var(--pointer-y) * -8px),0) scale(1.04); } }
+    @keyframes rail-in { from { opacity: 0; transform: translate3d(0,13px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 1ms !important; } }
+    @media (max-width: 920px) {
+      .clock-stage { grid-template-columns: 1fr; gap: 34px; min-height: auto; padding-top: 12vh; padding-bottom: 60px; }
+      .stage-copy { max-width: none; padding: 0; text-align: center; }
+      .stage-copy h1, .stage-note { max-width: none; margin-left: auto; margin-right: auto; }
+      .stage-copy h1 { margin-top: 14px; }
+      .stage-aside { justify-self: center; }
+      .utility-rail, .clock-footer { width: calc(100% - 48px); margin-left: 24px; margin-right: 24px; }
+    }
+    @media (max-width: 620px) {
+      .clock-header { padding-top: 20px; }
+      .brand-kicker, .header-status span:not(:last-child) { display: none; }
+      .clock-stage { gap: 26px; padding-top: 9vh; padding-left: 20px; padding-right: 20px; }
+      .date-label { font-size: 13px; }
+      .time-readout { margin-top: 18px; }
+      .time-main { font-size: clamp(68px,21vw,130px); }
+      .time-seconds { font-size: clamp(22px,6vw,36px); }
+      .time-meridiem { font-size: 12px; }
+      .time-meta { font-size: 8px; }
+      .progress-orbit { width: 124px; height: 124px; }
+      .utility-rail { align-items: stretch; flex-direction: column; gap: 15px; padding: 15px; border-radius: 20px; }
+      .rail-actions { display: grid; grid-template-columns: 1fr 1fr auto auto; }
+      .control-chip { min-width: 0; }
+      .clock-footer { flex-direction: column; align-items: flex-start; gap: 9px; margin-top: 17px; margin-bottom: 18px; }
+    }
+    @media (max-width: 420px) {
+      .header-status { gap: 4px; font-size: 9px; }
+      .rail-actions { grid-template-columns: 1fr 1fr; }
+      .icon-button { width: 100%; height: 38px; border-radius: 13px; }
+    }
+    /* Settings tab and live customization variants. */
+    .brand-button, .view-tab, .back-button, .reset-button { border: 0; color: inherit; background: transparent; cursor: pointer; }
+    .brand-button { display: flex; align-items: center; padding: 0; text-align: left; }
+    .brand-name, .brand-kicker { display: block; }
+    .view-tabs { position: absolute; left: 50%; display: flex; align-items: center; gap: 4px; transform: translateX(-50%); padding: 4px; border: 1px solid var(--border); border-radius: 13px; background: color-mix(in srgb, var(--surface) 70%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+    .view-tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 9px; color: var(--faint); font-size: 11px; font-weight: 650; transition: color .16s var(--ease), background-color .16s var(--ease), transform .16s var(--ease); }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active { color: var(--text); background: var(--surface-strong); box-shadow: 0 2px 12px rgba(44,56,79,.06); }
+    .view-tab:active, .back-button:active, .reset-button:active { transform: scale(.97); }
+    .settings-view { width: min(calc(100% - (var(--frame-gutter) * 2)),1080px); margin: 0 auto; padding: clamp(58px,9vh,100px) 0 58px; animation: settings-in .52s var(--ease) both; }
+    .settings-heading { display: grid; grid-template-columns: minmax(120px,1fr) minmax(260px,1.7fr) minmax(120px,1fr); align-items: end; gap: 30px; margin-bottom: 38px; }
+    .settings-heading > div { text-align: center; }
+    .settings-heading h1 { margin: 10px 0 8px; color: var(--text); font-size: clamp(34px,4vw,56px); font-weight: 600; letter-spacing: -.065em; line-height: .95; }
+    .settings-heading p:not(.eyebrow) { margin: 0 auto; max-width: 330px; color: var(--soft); font-size: 13px; line-height: 1.5; }
+    .back-button, .reset-button { display: inline-flex; align-items: center; gap: 7px; align-self: start; color: var(--soft); font-size: 11px; font-weight: 650; transition: color .16s var(--ease), transform .16s var(--ease); }
+    .back-button:hover, .reset-button:hover { color: var(--text); }
+    .reset-button { justify-self: end; color: var(--cobalt); }
+    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .settings-group { padding: 20px; border: 1px solid var(--border); border-radius: 17px; background: color-mix(in srgb, var(--surface) 66%, transparent); box-shadow: inset 0 1px 0 rgba(255,255,255,.48); backdrop-filter: blur(24px) saturate(1.15); -webkit-backdrop-filter: blur(24px) saturate(1.15); }
+    .settings-group:last-child { grid-column: 1 / -1; }
+    .group-heading { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 17px; padding-bottom: 13px; border-bottom: 1px solid var(--border); }
+    .group-heading span { color: var(--text); font-size: 12px; font-weight: 700; }
+    .group-heading small { color: var(--faint); font: 9px "SF Mono", "SFMono-Regular", ui-monospace, monospace; letter-spacing: .07em; text-transform: uppercase; }
+    .setting-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .setting-select { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+    .setting-select > span { color: var(--faint); font: 9px "SF Mono", "SFMono-Regular", ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .setting-select select { width: 100%; min-height: 40px; padding: 0 11px; border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: color-mix(in srgb, var(--surface-strong) 68%, transparent); font-size: 12px; cursor: pointer; outline: none; }
+    .swatches { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 4px; }
+    .swatch { width: 23px; height: 23px; padding: 0; border: 3px solid transparent; border-radius: 50%; cursor: pointer; transition: transform .16s var(--ease), border-color .16s var(--ease); }
+    .swatch:hover { transform: scale(1.09); }
+    .swatch.selected { border-color: var(--text); }
+    .swatch-cobalt { background: #2f63d8; } .swatch-violet { background: #7158d9; } .swatch-emerald { background: #2f9b78; } .swatch-coral { background: #dc6f6b; } .swatch-mono { background: #697486; }
+    .setting-stack { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 25px; }
+    .setting-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 54px; border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent); cursor: pointer; }
+    .setting-toggle-copy { display: flex; flex-direction: column; gap: 4px; }
+    .setting-toggle-copy > span { color: var(--text); font-size: 12px; font-weight: 600; } .setting-toggle-copy small { color: var(--faint); font-size: 10px; }
+    .setting-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .toggle-track { display: flex; align-items: center; width: 36px; height: 21px; padding: 3px; border-radius: 30px; background: var(--faint); transition: background-color .18s var(--ease); }
+    .toggle-track span { display: block; width: 15px; height: 15px; border-radius: 50%; background: white; box-shadow: 0 1px 4px rgba(0,0,0,.18); transition: transform .18s var(--ease); }
+    .setting-toggle input:checked + .toggle-track { background: var(--cobalt); } .setting-toggle input:checked + .toggle-track span { transform: translateX(15px); }
+    .settings-note { display: flex; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; background: color-mix(in srgb, var(--surface-strong) 52%, transparent); }
+    .note-mark { color: var(--cobalt); font-size: 16px; line-height: 1; } .settings-note p { margin: 0; color: var(--soft); font-size: 11px; line-height: 1.55; }
+    .accent-violet { --cobalt: #7158d9; } .accent-emerald { --cobalt: #2f9b78; } .accent-coral { --cobalt: #dc6f6b; } .accent-mono { --cobalt: #697486; }
+    .background-paper { background-image: linear-gradient(120deg, rgba(255,250,240,.92), rgba(241,232,215,.55)); }
+    .background-lavender { background-image: linear-gradient(120deg, rgba(239,241,255,.9), rgba(219,225,249,.7)); }
+    .background-midnight { background-image: linear-gradient(120deg, rgba(15,21,31,.82), rgba(19,32,55,.62)); }
+    .surface-solid .utility-rail, .surface-solid .settings-group { background: var(--surface-strong); backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .surface-contrast { --border: color-mix(in srgb, var(--text) 24%, transparent); --soft: color-mix(in srgb, var(--text) 82%, transparent); }
+    .font-rounded { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Avenir Next", sans-serif; }
+    .font-mono, .font-mono .time-main, .font-mono .time-seconds { font-family: "SF Mono", "SFMono-Regular", ui-monospace, monospace; }
+    .size-compact .time-main { font-size: clamp(72px,10vw,156px); } .size-large .time-main { font-size: clamp(96px,15vw,228px); }
+    .density-focused .clock-stage { min-height: min(78vh,820px); padding-top: clamp(32px,4vh,58px); padding-bottom: 18px; }
+    .density-balanced .clock-stage { min-height: min(69vh,720px); }
+    .motion-subtle .clock-haze { animation-duration: 34s; } .motion-off *, .motion-off *::before, .motion-off *::after { animation: none !important; transition: none !important; }
+    .hide-seconds .time-seconds { display: none; } .hide-date .date-label { display: none; } .hide-progress .stage-aside { display: none; }
+    .settings-view[hidden] { display: none; }
+    .settings-open .clock-stage, .settings-open .utility-rail, .settings-open .clock-footer { display: none; }
+    @keyframes settings-in { from { opacity: 0; transform: translate3d(0,12px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+    @media (max-width: 920px) { .view-tabs { position: static; transform: none; margin-left: auto; margin-right: 18px; } .settings-view { padding-top: 60px; } .settings-heading { grid-template-columns: auto 1fr auto; gap: 18px; } .settings-grid { grid-template-columns: 1fr; } .settings-group:last-child { grid-column: auto; } }
+    @media (max-width: 620px) { .clock-header { flex-wrap: wrap; gap: 15px; } .view-tabs { order: 3; width: 100%; margin: 0; justify-content: center; } .header-status { margin-left: auto; } .settings-view { width: calc(100% - 40px); padding-top: 45px; } .settings-heading { grid-template-columns: auto auto; align-items: start; } .settings-heading > div { grid-column: 1 / -1; grid-row: 1; text-align: left; } .settings-heading h1 { font-size: 42px; } .settings-heading p:not(.eyebrow) { margin-left: 0; } .back-button { grid-row: 2; } .reset-button { grid-row: 2; } .settings-group { padding: 16px; } .setting-row, .setting-stack { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="clock-shell" id="clockShell">
+    <div class="clock-haze" aria-hidden="true"></div>
+    <header class="clock-header">
+      <div class="brand-lockup">
+        <svg class="brand-mark" viewBox="0 0 64 64" role="img" aria-label="TICK. mark">
+          <rect x="7" y="7" width="50" height="50" rx="17" fill="rgba(255,255,255,.62)" stroke="var(--cobalt)" stroke-width="3" />
+          <path d="M32 17v17l12 7" fill="none" stroke="var(--text)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="48" cy="16" r="3.6" fill="var(--cobalt)" />
+        </svg>
+        <div>
+          <p class="brand-name">TICK.</p>
+          <p class="brand-kicker">a quieter way to watch time</p>
+        </div>
+      </div>
+      <nav class="view-tabs" aria-label="Primary"><button class="view-tab active" id="clockTab" type="button">Clock</button><button class="view-tab" id="settingsTab" type="button">⚙ Settings</button></nav>
+      <div class="header-status" aria-label="Current location and local time status">
+        <span class="globe" aria-hidden="true">◎</span>
+        <span id="timezone">local time</span>
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>live</span>
+      </div>
+    </header>
+
+    <section class="clock-stage" aria-labelledby="clock-heading">
+      <div class="stage-copy">
+        <p class="eyebrow" id="greeting">good morning</p>
+        <h1 id="clock-heading">for this moment.</h1>
+        <p class="stage-note">A quiet read on now.</p>
+      </div>
+
+      <div class="time-block" aria-live="polite">
+        <p class="date-label"><span aria-hidden="true">▦</span><span id="dateLabel">Saturday, August 29, 2026</span></p>
+        <div class="time-readout" id="timeReadout" aria-label="Current time">
+          <span class="time-main" id="timeMain">2:54</span>
+          <span class="time-seconds" id="timeSeconds">19</span>
+          <span class="time-meridiem" id="meridiem">PM</span>
+        </div>
+        <div class="time-meta"><span id="formatLabel">12-hour format</span><span class="meta-rule" aria-hidden="true"></span><span id="shortDate">Aug 29</span></div>
+      </div>
+
+      <div class="stage-aside" aria-label="Day progress">
+        <div class="progress-orbit">
+          <svg viewBox="0 0 100 100" role="img" aria-label="Progress through today">
+            <circle class="orbit-track" cx="50" cy="50" r="44"></circle>
+            <circle class="orbit-progress" id="orbitProgress" cx="50" cy="50" r="44"></circle>
+          </svg>
+          <div class="orbit-center"><span class="orbit-value" id="dayPercent">0%</span><span class="orbit-label">of today</span></div>
+        </div>
+        <p class="aside-caption">The day is still unfolding.</p>
+      </div>
+    </section>
+
+    <section class="utility-rail" aria-label="Clock controls">
+      <div class="rail-intro"><span class="rail-icon" aria-hidden="true">◷</span><div><p class="rail-title">clock preferences</p><p class="rail-subtitle">Make it feel like yours.</p></div></div>
+      <div class="rail-actions">
+        <button class="control-chip" id="formatButton" type="button" aria-pressed="true"><span class="chip-label">format</span><span class="chip-value" id="formatValue">12-hour</span><span class="chip-check" aria-hidden="true">✓</span></button>
+        <button class="control-chip" id="themeButton" type="button" aria-pressed="false"><span class="chip-icon" id="themeIcon" aria-hidden="true">☼</span><span class="chip-label">appearance</span><span class="chip-value" id="themeValue">daylight</span></button>
+        <button class="icon-button" id="copyButton" type="button" aria-label="Copy current time" title="Copy current time">↗</button>
+        <button class="icon-button" id="fullscreenButton" type="button" aria-label="Enter fullscreen" title="Enter fullscreen">↗</button>
+      </div>
+    </section>
+    <footer class="clock-footer"><p>Designed for the in-between moments.</p><p><span class="footer-line" aria-hidden="true"></span>local, precise, present</p>    </footer>
+
+    <section class="settings-view" id="settingsView" aria-labelledby="settingsHeading" hidden>
+      <div class="settings-heading"><button class="back-button" id="backToClock" type="button">← Clock</button><div><p class="eyebrow">personalize your space</p><h1 id="settingsHeading">Settings</h1><p>Shape the clock around the way you like to see time.</p></div><button class="reset-button" id="resetSettings" type="button">Reset all</button></div>
+      <div class="settings-grid">
+        <section class="settings-group"><div class="group-heading"><span>Visual system</span><small>Set the mood</small></div><div class="setting-row"><label class="setting-select"><span>Theme</span><select data-setting="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="auto">System</option></select></label><label class="setting-select"><span>Surface</span><select data-setting="surface"><option value="glass">Glass material</option><option value="solid">Soft solid</option><option value="contrast">High contrast</option></select></label></div><div class="setting-row"><label class="setting-select"><span>Background</span><select data-setting="background"><option value="dawn">Dawn haze</option><option value="midnight">Midnight</option><option value="paper">Warm paper</option><option value="lavender">Blue lavender</option></select></label><div class="setting-select"><span>Accent</span><div class="swatches" role="radiogroup" aria-label="Accent color"><button class="swatch swatch-cobalt" data-accent="cobalt" type="button" aria-label="Cobalt"></button><button class="swatch swatch-violet" data-accent="violet" type="button" aria-label="Violet"></button><button class="swatch swatch-emerald" data-accent="emerald" type="button" aria-label="Emerald"></button><button class="swatch swatch-coral" data-accent="coral" type="button" aria-label="Coral"></button><button class="swatch swatch-mono" data-accent="mono" type="button" aria-label="Monochrome"></button></div></div></div></section>
+        <section class="settings-group"><div class="group-heading"><span>Clock display</span><small>Choose your readout</small></div><div class="setting-row"><label class="setting-select"><span>Clock size</span><select data-setting="clockSize"><option value="compact">Compact</option><option value="standard">Standard</option><option value="large">Large</option></select></label><label class="setting-select"><span>Layout density</span><select data-setting="density"><option value="spacious">Spacious</option><option value="balanced">Balanced</option><option value="focused">Focused</option></select></label></div><div class="setting-stack"><label class="setting-toggle"><span class="setting-toggle-copy"><span>12-hour format</span><small>Use AM and PM markers</small></span><input type="checkbox" data-setting="hour12"><span class="toggle-track"><span></span></span></label><label class="setting-toggle"><span class="setting-toggle-copy"><span>Show seconds</span><small>Keep the live tick visible</small></span><input type="checkbox" data-setting="showSeconds"><span class="toggle-track"><span></span></span></label><label class="setting-toggle"><span class="setting-toggle-copy"><span>Show date</span><small>Keep today’s date above the clock</small></span><input type="checkbox" data-setting="showDate"><span class="toggle-track"><span></span></span></label><label class="setting-toggle"><span class="setting-toggle-copy"><span>Show day progress</span><small>Display the circular progress ring</small></span><input type="checkbox" data-setting="showProgress"><span class="toggle-track"><span></span></span></label></div></section>
+        <section class="settings-group"><div class="group-heading"><span>Type & motion</span><small>Feel every interaction</small></div><div class="setting-row"><label class="setting-select"><span>Typography</span><select data-setting="font"><option value="system">System</option><option value="rounded">Rounded</option><option value="mono">Monospaced</option></select></label><label class="setting-select"><span>Motion</span><select data-setting="motion"><option value="full">Full fluid</option><option value="subtle">Subtle</option><option value="off">Reduced</option></select></label></div><div class="settings-note"><span class="note-mark">✦</span><p>Changes save automatically on this device. Every preference is applied live to the clock surface.</p></div></section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const shell = document.getElementById('clockShell');
+      const timeMain = document.getElementById('timeMain');
+      const timeSeconds = document.getElementById('timeSeconds');
+      const meridiem = document.getElementById('meridiem');
+      const dateLabel = document.getElementById('dateLabel');
+      const shortDate = document.getElementById('shortDate');
+      const dayPercent = document.getElementById('dayPercent');
+      const orbitProgress = document.getElementById('orbitProgress');
+      const greeting = document.getElementById('greeting');
+      const timezone = document.getElementById('timezone');
+      const formatButton = document.getElementById('formatButton');
+      const themeButton = document.getElementById('themeButton');
+      const fullscreenButton = document.getElementById('fullscreenButton');
+      const copyButton = document.getElementById('copyButton');
+      const formatValue = document.getElementById('formatValue');
+      const formatLabel = document.getElementById('formatLabel');
+      const themeValue = document.getElementById('themeValue');
+      const themeIcon = document.getElementById('themeIcon');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let hour12 = true;
+      let darkMode = false;
+      let lastSecond = -1;
+      let rafId = 0;
+      let pointerFrame = 0;
+
+      timezone.textContent = Intl.DateTimeFormat().resolvedOptions().timeZone.replace('_', ' ');
+
+      const pad = (value) => String(value).padStart(2, '0');
+      const formatDate = (date, options) => new Intl.DateTimeFormat(undefined, options).format(date);
+      const getGreeting = (hour) => hour < 5 ? 'good night' : hour < 12 ? 'good morning' : hour < 18 ? 'good afternoon' : 'good evening';
+      const restartAnimation = (element, className) => {
+        element.classList.remove(className);
+        void element.offsetWidth;
+        element.classList.add(className);
+      };
+
+      function render(now) {
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const seconds = now.getSeconds();
+        const shownHours = hour12 ? ((hours + 11) % 12) + 1 : hours;
+        const percent = ((hours * 3600 + minutes * 60 + seconds) / 86400) * 100;
+        const main = `${shownHours}:${pad(minutes)}`;
+
+        if (seconds !== lastSecond) {
+          timeSeconds.textContent = pad(seconds);
+          restartAnimation(timeSeconds, 'seconds-tick');
+          lastSecond = seconds;
+        }
+        if (timeMain.textContent !== main) {
+          timeMain.textContent = main;
+          restartAnimation(timeMain, 'digit-breathe');
+        }
+        const nextMeridiem = hour12 ? (hours >= 12 ? 'PM' : 'AM') : '';
+        if (meridiem.textContent !== nextMeridiem) {
+          meridiem.textContent = nextMeridiem;
+          restartAnimation(meridiem, 'meridiem-settle');
+        }
+        meridiem.style.display = hour12 ? 'inline-block' : 'none';
+        dateLabel.textContent = formatDate(now, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        shortDate.textContent = formatDate(now, { month: 'short', day: 'numeric' });
+        dayPercent.textContent = `${Math.round(percent)}%`;
+        orbitProgress.style.strokeDashoffset = String(276.46 - (276.46 * percent / 100));
+        greeting.textContent = getGreeting(hours);
+        document.title = `${main}${hour12 ? ` ${nextMeridiem}` : ''} — TICK.`;
+      }
+
+      function frame() {
+        render(new Date());
+        rafId = requestAnimationFrame(frame);
+      }
+      render(new Date());
+      if (reducedMotion) window.setInterval(() => render(new Date()), 1000);
+      else rafId = requestAnimationFrame(frame);
+
+      window.addEventListener('pointermove', (event) => {
+        if (reducedMotion) return;
+        if (pointerFrame) cancelAnimationFrame(pointerFrame);
+        pointerFrame = requestAnimationFrame(() => {
+          shell.style.setProperty('--pointer-x', ((event.clientX / innerWidth - .5) * 2).toFixed(3));
+          shell.style.setProperty('--pointer-y', ((event.clientY / innerHeight - .5) * 2).toFixed(3));
+        });
+      }, { passive: true });
+      window.addEventListener('blur', () => {
+        shell.style.setProperty('--pointer-x', '0');
+        shell.style.setProperty('--pointer-y', '0');
+      });
+
+      formatButton.addEventListener('click', () => {
+        hour12 = !hour12;
+        formatButton.setAttribute('aria-pressed', String(hour12));
+        formatValue.textContent = hour12 ? '12-hour' : '24-hour';
+        formatLabel.textContent = hour12 ? '12-hour format' : '24-hour format';
+        render(new Date());
+      });
+      themeButton.addEventListener('click', () => {
+        darkMode = !darkMode;
+        shell.classList.toggle('dark', darkMode);
+        themeButton.setAttribute('aria-pressed', String(darkMode));
+        themeValue.textContent = darkMode ? 'night' : 'daylight';
+        themeIcon.textContent = darkMode ? '☾' : '☼';
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', darkMode ? '#0f1520' : '#edf1f6');
+      });
+      fullscreenButton.addEventListener('click', async () => {
+        if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+        else await document.exitFullscreen?.();
+      });
+      document.addEventListener('fullscreenchange', () => {
+        const active = Boolean(document.fullscreenElement);
+        fullscreenButton.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+        fullscreenButton.title = active ? 'Exit fullscreen' : 'Enter fullscreen';
+      });
+      copyButton.addEventListener('click', async () => {
+        try { await navigator.clipboard?.writeText(`${timeMain.textContent}${hour12 ? ` ${meridiem.textContent}` : ''} · ${dateLabel.textContent}`); } catch (_) {}
+        copyButton.textContent = '✓';
+        window.setTimeout(() => { copyButton.textContent = '↗'; }, 1500);
+      });
+      window.addEventListener('beforeunload', () => { if (rafId) cancelAnimationFrame(rafId); });
+    })();
+  </script>
+  <script>
+    (() => {
+      const shell = document.getElementById('clockShell');
+      const settingsView = document.getElementById('settingsView');
+      const clockTab = document.getElementById('clockTab');
+      const settingsTab = document.getElementById('settingsTab');
+      const backToClock = document.getElementById('backToClock');
+      const resetSettings = document.getElementById('resetSettings');
+      const formatButton = document.getElementById('formatButton');
+      const themeButton = document.getElementById('themeButton');
+      const defaults = { theme: 'light', accent: 'cobalt', background: 'dawn', surface: 'glass', font: 'system', clockSize: 'standard', density: 'spacious', motion: 'full', hour12: true, showSeconds: true, showProgress: true, showDate: true };
+      let settings;
+      try { settings = { ...defaults, ...(JSON.parse(localStorage.getItem('moments-settings') || 'null') || {}) }; } catch (_) { settings = { ...defaults }; }
+
+      const save = () => localStorage.setItem('moments-settings', JSON.stringify(settings));
+      const isSystemDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
+      const shouldBeDark = () => settings.theme === 'dark' || (settings.theme === 'auto' && isSystemDark());
+      const apply = () => {
+        const settingsIsOpen = shell.classList.contains('settings-open');
+        shell.className = `clock-shell ${shouldBeDark() ? 'dark' : ''} ${settingsIsOpen ? 'settings-open' : ''} theme-${settings.theme} accent-${settings.accent} background-${settings.background} surface-${settings.surface} font-${settings.font} size-${settings.clockSize} density-${settings.density} motion-${settings.motion}`;
+        const currentFormat = document.getElementById('formatValue').textContent === '12-hour';
+        if (currentFormat !== settings.hour12) formatButton.click();
+        document.querySelectorAll('[data-setting]').forEach((control) => {
+          const key = control.dataset.setting;
+          if (control.type === 'checkbox') control.checked = Boolean(settings[key]);
+          else control.value = settings[key];
+        });
+        document.querySelectorAll('[data-accent]').forEach((button) => button.classList.toggle('selected', button.dataset.accent === settings.accent));
+        shell.classList.toggle('hide-seconds', !settings.showSeconds);
+        shell.classList.toggle('hide-date', !settings.showDate);
+        shell.classList.toggle('hide-progress', !settings.showProgress);
+        save();
+      };
+      const setView = (view) => {
+        const isSettings = view === 'settings';
+        shell.classList.toggle('settings-open', isSettings);
+        settingsView.hidden = !isSettings;
+        clockTab.classList.toggle('active', !isSettings);
+        settingsTab.classList.toggle('active', isSettings);
+        if (isSettings) settingsView.querySelector('select')?.focus();
+      };
+      const setSetting = (key, value) => { settings[key] = value; apply(); };
+
+      document.querySelectorAll('select[data-setting]').forEach((control) => control.addEventListener('change', () => setSetting(control.dataset.setting, control.value)));
+      document.querySelectorAll('input[type="checkbox"][data-setting]').forEach((control) => control.addEventListener('change', () => setSetting(control.dataset.setting, control.checked)));
+      document.querySelectorAll('[data-accent]').forEach((button) => button.addEventListener('click', () => setSetting('accent', button.dataset.accent)));
+      clockTab.addEventListener('click', () => setView('clock'));
+      settingsTab.addEventListener('click', () => setView('settings'));
+      backToClock.addEventListener('click', () => setView('clock'));
+      resetSettings.addEventListener('click', () => { settings = { ...defaults }; apply(); });
+      formatButton.addEventListener('click', () => window.setTimeout(() => { settings.hour12 = document.getElementById('formatValue').textContent === '12-hour'; save(); }, 0));
+      themeButton.addEventListener('click', () => window.setTimeout(() => { settings.theme = shell.classList.contains('dark') ? 'dark' : 'light'; save(); }, 0));
+      matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (settings.theme === 'auto') apply(); });
+      apply();
+    })();
+  </script>
+</body>
+</html>
